@@ -1,0 +1,20 @@
+REM_BLOCK
+Example Script
+Just a simple script to be converted to c
+END_REM
+
+DEFINE #message textMessage
+VAR $count = 5
+
+GUI r
+delay 1000
+STRINGLN notepad.exe
+delay 1000
+
+WHILE ($count > 0)
+    STRINGLN $count
+    $count -= 1
+    delay 1000
+END_WHILE
+
+STRINGLN Timer ended
