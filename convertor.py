@@ -5,6 +5,9 @@ from ast import literal_eval
 
 def detectType(text):
     try:
+        _type = type(literal_eval(text.lower().capitalize()))     #< Check for bool by converting TRUE/FALSE to True/False
+        if _type == bool:
+            return("bool")
         _type = type(literal_eval(text))
         if _type == str:
             return("String")
@@ -12,8 +15,6 @@ def detectType(text):
             return("int")
         if _type == float:
             return("float")
-        if _type == bool:
-            return("bool")
 
     except (ValueError, SyntaxError):
             return("String")
@@ -27,7 +28,7 @@ def getArgsKwargs(func):
 
     return(len(args), len(kwargs))
 
-class Convertor:
+class Convertor():
     def __init__(self,  script):
         self.commands = {
             "DELAY": self._delay,
@@ -49,42 +50,117 @@ class Convertor:
             "ELSE": self._startElse,
             "RESET": self._releaseAll,
             "RESTART_PAYLOAD": self._restart,
-            "STOP_PAYLOAD": self._stop
+            "STOP_PAYLOAD": self._stop,
+            "FUNCTION": self._createFunction,
+            "RETURN": self._return
         }
-        
+
         self.vars = {}
         self.defines = {}
-        
+        self.functions = {}
+
         self.defaultDelay = 10
         self.stringDelay = 5
-
-        self.nestDeepness = 0
+        
+        self.absoluteStart = 2
+        self.functionsStart = 8
 
         self.arduinoOutput = ""
 
         with open(script) as f:
             self.script = f.read()
+            self.scriptIter = iter(self.script.split("\n"))
+
         with open(f"keyConversion.json") as f:
-            self.layout = json.load(f)
+            self.keyConversion = json.load(f)
 
     def _removeTHEN(self, condition):
         return(condition[:condition.rfind(" THEN")])
+
+    def _addStringToBeginning(self, stringToAdd, location=None):
+        if location == None:
+            location = self.functionsStart
+
+        lines = self.arduinoOutput.split('\n')
+
+        # Modify the specific line
+        lines[location-1] = stringToAdd + "\n" + lines[location-1]
+
+        # Join the lines back into a single string
+        arduinoOutput = '\n'.join(lines)
+        return(arduinoOutput)
+    
+    def _addVariableToOutput(self, expression):
+        self.functionsStart += 1
+        return(self._addStringToBeginning(expression, 2))
+
+    def _getCodeBlock(self, endPhrase):
+        block = ""
+        _break = False
+
+        if type(endPhrase) == str:
+            endPhrase = [endPhrase.upper()]
+        else:
+            endPhrase = [phrase.upper() for phrase in endPhrase]
+
+        for line in self.scriptIter:
+            _line = line.strip().upper()
+            for phrase in endPhrase:
+                if _line == phrase:
+                    _break = True
+                    break
+            if _break:
+                break
+            block += line+"\n"
+        return(block[:-1])
+    
+    def _createFunction(self, name):
+        arduCode = ""
+        type = "void"
+        name = name.strip().replace("()", "")
+        code = self._getCodeBlock(["END_FUNCTION", "ENDFUNCTION"])
+        lines = code.split("\n")
+        
+        for line in lines:
+            if line.strip().startswith("RETURN"):
+                type = "int"
+            arduCode += self.convertLine(line)
+
+        arduCode = f"{type} {name}()" + "{\n" + arduCode + "\n}"
+
+        self.functions[name] = arduCode
+        self.arduinoOutput = self._addStringToBeginning(arduCode)
+        return("")
+    
+    def _return(self, value):
+        return(f"return (int){value};")
+    
+    def _isVar(self, text):
+        if text in self.vars:
+            return(True)
+        return(False)
+
+    def _isDefine(self, text):
+        if text in self.defines:
+            return(True)
+        return(False)
 
     def _createVar(self, varName, value):
         varType = detectType(value)
         if varType == "String":
             value = f'"{value}"'
-        return(f"{varType} {varName} = {value};")
+        self.arduinoOutput = self._addVariableToOutput(f"{varType} {varName} = {value};")
+        return("")
 
     def _keyDown(self, key):
-        if key.upper() not in self.layout:
+        if key.upper() not in self.keyConversion:
             return(f"Keyboard.press('{key}');")
-        return(f"Keyboard.press({self.layout[key.upper()]});")
+        return(f"Keyboard.press({self.keyConversion[key.upper()]});\n{self._delay(self.defaultDelay)}")
     
     def _keyUp(self, key):
-        if key.upper() not in self.layout:
+        if key.upper() not in self.keyConversion:
             return(f"Keyboard.release('{key}');")
-        return(f"Keyboard.release({self.layout[key.upper()]});")
+        return(f"Keyboard.release({self.keyConversion[key.upper()]});\n{self._delay(self.defaultDelay)}")
     
     def _releaseAll(self):
         return(f"Keyboard.releaseAll();")
@@ -104,7 +180,7 @@ class Convertor:
 
     def _pressKey(self, key):
         key = key.upper()
-        return(f"{self._keyDown(key)}\n{self._delay(10)}\n{self._keyUp(key)}")
+        return(f"{self._keyDown(key)}\n{self._keyUp(key)}")
 
     def _string(self, text):
         newText = "\""
@@ -121,10 +197,10 @@ class Convertor:
             newText = newText[:-5]
         else:
             newText = newText[:-1]+"\""
-        return(f"typeWithDelay({newText}, {self.stringDelay});")
+        return(f"typeWithDelay({newText}, {self.stringDelay});\n{self._delay(self.defaultDelay)}")
 
     def _stringln(self, text):
-        return(f"{self._string(text)}\n{self._pressKey("ENTER")}")
+        return(f"{self._string(text)}\n{self._pressKey("ENTER")}\n{self._delay(self.defaultDelay)}")
 
     def _setVar(self, expression):
         expression = expression[1:]
@@ -134,18 +210,17 @@ class Convertor:
 
         self.vars[varName] = expression
         varType = detectType(expression[expression.rfind(" ")+1:])
-        return(f"{varType} {expression};")
+        self.arduinoOutput = self._addVariableToOutput(f"{varType} {expression};")
+        return("")
 
     def _setDefine(self, defineName, value):
         self.defines[defineName[1:]] = value
         return(self._createVar(defineName[1:], value))
-    
+
     def _startWhile(self, condition):
-        self.nestDeepness += 1
         return(f"while({condition}) "+"{")
 
     def _startIf(self, condition):
-        self.nestDeepness += 1
         return(f"if({self._removeTHEN(condition)}) "+"{")
 
     def _startElse(self, condition=None):
@@ -157,10 +232,6 @@ class Convertor:
         return("}" + f"else if({condition}) "+"{")
 
     def _endFunc(self):
-        print(self.nestDeepness)
-        for _ in range(self.nestDeepness-1):
-            self.addLine("}")
-        self.nestDeepness = 0
         return("}")
 
     def _restart(self):
@@ -169,8 +240,11 @@ class Convertor:
     def _stop(self):
         return("goto end;")
 
-    def addLine(self, line):
-        self.arduinoOutput += f"{line}\n"
+    def addLine(self, line, text="self", end="\n"):
+        newline = f"{line}{end}"
+        if text != None:
+            self.arduinoOutput += newline
+        return(newline)
 
     def _addPreCode(self):
 
@@ -194,65 +268,76 @@ class Convertor:
         self.addLine("Keyboard.end();")
         self.addLine("}")
         self.addLine("void loop() {}")
+    
+    def convertLine(self, line):
+        newLine = ""
+        line = line.strip()
+        if line.startswith("REM_BLOCK"):                  #< Ignore comments
+            while line != "END_REM":
+                line = next(self.scriptIter)
+                line = line.strip()
+        if line == "" or line.startswith("REM"):          #< ignore empty lines and comments
+            return("")
+
+        line = line.replace('"', '\\"')
+        line = line.replace('\\', '\\\"')
+
+        for var in self.vars.keys():
+            line = line.replace(var, f"\\{var}")          #<  replace all instance of a varName with /varName
+            line = line.replace(f"$\\{var}", var)         #<  replace all instance of a variable with its name (varName)
+            if line.startswith(var):
+                newLine += self.addLine(line+";", text=None)
+
+        for define in self.defines.keys():
+            line = line.replace(define, f"\\{define}")    #<  replace all instance of a defineName with /defineName
+            line = line.replace(f"#\\{define}", define)   #<  replace all instance of a define with its name (defineName)
+            if line.startswith(define):
+                newLine += self.addLine(line+";", text=None)
+
+        lineFrag = line.split(" ")
+        
+        if lineFrag[0].removesuffix("()") in self.functions:
+            newLine += self.addLine(f"{lineFrag[0]};", text=None)
+            return(newLine)
+        
+        if (lineFrag[0].upper() in self.keyConversion) or (lineFrag[0].isalpha() and len(lineFrag[0]) == 1):    #< check if its a letter or key
+            for key in lineFrag:
+                upperKey = key.upper()
+                if upperKey in self.keyConversion:
+                    newLine += self.addLine(self._keyDown(upperKey), text=None)
+                    newLine += self.addLine(self._delay(10), text=None)
+                else:
+                    newLine += self.addLine(self._keyDown(key), text=None)
+            for key in reversed(lineFrag):
+                upperKey = key.upper()
+                if upperKey in self.keyConversion:
+                    newLine += self.addLine(self._keyUp(upperKey), text=None)
+                    newLine += self.addLine(self._delay(10), text=None)
+                else:
+                    newLine += self.addLine(self._keyUp(key), text=None)
+            newLine += self.addLine(self._delay(self.defaultDelay), text=None)
+
+        elif lineFrag[0].upper() in self.commands:            #< check if its a command
+            command = lineFrag[0].upper()
+            vars = lineFrag[1:]
+            lineVarLength = len(vars)
+            method = self.commands[command]
+            argsLen, kwargsLen = getArgsKwargs(method)
+            if argsLen + kwargsLen == 0:
+                newLine += self.addLine(method(), text=None)
+
+            elif argsLen + kwargsLen == 1:                     #< for funcs that need a string (STRING/STRINGLN)
+                newLine += self.addLine(method(line[line.find(" ")+1:]), text=None)
+            
+            elif lineVarLength >= argsLen and lineVarLength <= argsLen + kwargsLen:
+                newLine += self.addLine(method(*vars), text=None)
+        
+        return(newLine)
 
     def convert(self):
         self._addPreCode()
-        scriptIter = iter(self.script.split("\n"))
-        for line in scriptIter:
-            line = line.strip()
-            if line.startswith("REM_BLOCK"):
-                while line != "END_REM":
-                    line = next(scriptIter)
-                    line = line.strip()
-            if line == "" or line.startswith("REM"):     #< ignore empty lines
-                continue
-            line = line.replace('"', '\\"')
-            line = line.replace('\\', '\\\"')
-
-            for var in self.vars.keys():
-                line = line.replace(var, f"\\{var}")
-                line = line.replace(f"$\\{var}", var)
-                if line.startswith(var):
-                    self.addLine(line+";")
-
-            for define in self.defines.keys():
-                line = line.replace(define, f"\\{define}")
-                line = line.replace(f"#\\{define}", define)
-                if line.startswith(define):
-                    self.addLine(line+";")
-
-            lineFrag = line.split(" ")
-            if lineFrag[0].upper() in self.layout or (lineFrag[0].isalpha() and len(lineFrag[0]) == 1):
-                for key in lineFrag:
-                    upperKey = key.upper()
-                    if upperKey in self.layout:
-                        self.addLine(self._keyDown(upperKey))
-                        self.addLine(self._delay(10))
-                    else:
-                        self.addLine(self._keyDown(key))
-                for key in reversed(lineFrag):
-                    upperKey = key.upper()
-                    if upperKey in self.layout:
-                        self.addLine(self._keyUp(upperKey))
-                        self.addLine(self._delay(10))
-                    else:
-                        self.addLine(self._keyUp(key))
-            elif lineFrag[0].upper() in self.commands:
-                command = lineFrag[0].upper()
-                vars = lineFrag[1:]
-                lineVarLength = len(vars)
-                method = self.commands[command]
-                argsLen, kwargsLen = getArgsKwargs(method)
-                if argsLen + kwargsLen == 0:
-                    self.addLine(method())
-
-                elif argsLen + kwargsLen == 1:                     #< for funcs that need a string (STRING/STRINGLN)
-                    self.addLine(method(line[line.find(" ")+1:]))
-                
-                elif lineVarLength >= argsLen and lineVarLength <= argsLen + kwargsLen:
-                    self.addLine(method(*vars))
-
-            self.addLine(self._delay(self.defaultDelay))
+        for line in self.scriptIter:
+            self.addLine(self.convertLine(line), end="")
 
         self._addPostCode()
         return(self.arduinoOutput)

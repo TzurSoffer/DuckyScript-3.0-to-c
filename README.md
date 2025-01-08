@@ -4,9 +4,10 @@
 The **Convertor** class is a Python-based script that converts DuckyScript into Arduino code for keyboard emulation. It is the only converter that supports DuckyScript 3.0 as far as I am aware. This enables more complex operations then before.
 
 ## Features
-- SQupport for **DuckyScript 3.0** commands.
+- Support for **DuckyScript 3.0** commands.
 - Converts DuckyScript into Arduino-compatible `.ino` files.
 - Dynamic variable and constant definitions.
+- Function support.
 - Advanced logic handling with `IF`, `WHILE`, and conditional blocks.
 - Keyboard press, release, and delay management.
 - Support for custom keyboard layouts via JSON configuration.
@@ -23,26 +24,27 @@ The **Convertor** class is a Python-based script that converts DuckyScript into 
 ### Input Script Format
 The input script should be a text file written in DuckyScript 3.0 format. Each command corresponds to a specific action. Supported commands include:
 
-| Command                | Description                                      |
-|------------------------|--------------------------------------------------|
-| `REM <comment>`        | Comment                                          |
-| `REM_BLOCK <comment>`  | Comment block, comment until END_REM             |
-| `END_REM`              | End REM_BLOCK                                    |
-| `DELAY <time>`         | Adds a delay in milliseconds.                    |
-| `STRING <text>`        | Types a string using the keyboard.               |
-| `STRINGLN <text>`      | Types a string followed by `ENTER`.              |
-| `HOLD <key>`           | Holds down a key.                                |
-| `RELEASE <key>`        | Releases a key.                                  |
-| `DEFAULT_DELAY <time>` | Sets the default delay for all commands.         |
-| `STRINGDELAY <time>`   | Sets the delay between characters in strings.    |
-| `VAR $name value`      | Defines a variable.                              |
-| `DEFINE #name value`   | Defines a constant.                              |
-| `WHILE <condition>`    | Starts a `while` loop.                           |
-| `IF <condition>`       | Starts an `if` block.                            |
-| `END_WHILE`, `END_IF`  | Ends a `while` / `if` block.                     |
-| `RESET`                | Releases all keys.                               |
-| `RESTART_PAYLOAD`      | Restarts the script.                             |
-| `STOP_PAYLOAD`         | Stops the script.                                |
+| Command                | Description                                         |
+|------------------------|-----------------------------------------------------|
+| `REM <comment>`        | Comment                                             |
+| `REM_BLOCK <comment>`  | Comment block, comment until END_REM                |
+| `END_REM`              | End REM_BLOCK                                       |
+| `DELAY <time>`         | Adds a delay in milliseconds.                       |
+| `STRING <text>`        | Types a string using the keyboard.                  |
+| `STRINGLN <text>`      | Types a string followed by `ENTER`.                 |
+| `HOLD <key>`           | Holds down a key.                                   |
+| `RELEASE <key>`        | Releases a key.                                     |
+| `DEFAULT_DELAY <time>` | Sets the default delay for all commands.            |
+| `STRINGDELAY <time>`   | Sets the delay between characters in strings.       |
+| `VAR $name value`      | Defines a variable.                                 |
+| `DEFINE #name value`   | Defines a constant.                                 |
+| `WHILE <condition>`    | Starts a `while` loop.                              |
+| `FUNCTION <name>`      | declares a function that will execute once called.  |
+| `IF <condition>`       | Starts an `if` block.                               |
+| `END_WHILE`, `END_IF`, `END_FUNCTION`  | Ends a `while` / `if` / `function` block.  |
+| `RESET`                | Releases all keys.                                  |
+| `RESTART_PAYLOAD`      | Restarts the script.                                |
+| `STOP_PAYLOAD`         | Stops the script.                                   |
 
 ### Example Input Script (`payload.txt`)
 ```txt
@@ -59,11 +61,21 @@ delay 1000
 STRINGLN notepad.exe
 delay 1000
 
+FUNCTION TIMER()
 WHILE ($count > 0)
     STRINGLN $count
     $count -= 1
     delay 1000
 END_WHILE
+END_FUNCTION
+
+TIMER()
+$count = 3
+TIMER()
+$count = 2
+TIMER()
+$count = 10
+TIMER()
 
 STRINGLN Timer ended
 ```

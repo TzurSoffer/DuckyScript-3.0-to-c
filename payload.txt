@@ -11,10 +11,20 @@ delay 1000
 STRINGLN notepad.exe
 delay 1000
 
+FUNCTION TIMER()
 WHILE ($count > 0)
     STRINGLN $count
     $count -= 1
     delay 1000
 END_WHILE
+END_FUNCTION
+
+TIMER()
+$count = 3
+TIMER()
+$count = 2
+TIMER()
+$count = 10
+TIMER()
 
 STRINGLN Timer ended
