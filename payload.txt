@@ -17,9 +17,10 @@ WHILE ($count > 0)
     $count -= 1
     delay 1000
 END_WHILE
+RETURN TRUE
 END_FUNCTION
 
-TIMER()
+STRINGLN TIMER()
 $count = 3
 TIMER()
 $count = 2

@@ -7,7 +7,7 @@ Keyboard.press(text[i]);
 delay(delayTime);
 Keyboard.release(text[i]);
 }}
-void TIMER(){
+int TIMER(){
 while((count > 0)) {
 typeWithDelay("" + String(count), 5);
 delay(10);
@@ -19,7 +19,7 @@ delay(10);
 count -= 1;
 delay(1000);
 }
-
+return (int)true;
 }
 void setup() {
 Keyboard.begin();
@@ -46,7 +46,13 @@ delay(10);
 delay(10);
 delay(1000);
 
-TIMER();
+typeWithDelay("" + String(TIMER()), 5);
+delay(10);
+Keyboard.press(KEY_KP_ENTER);
+delay(10);
+Keyboard.release(KEY_KP_ENTER);
+delay(10);
+delay(10);
 count = 3;
 TIMER();
 count = 2;

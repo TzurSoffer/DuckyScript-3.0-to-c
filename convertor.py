@@ -51,8 +51,7 @@ class Convertor():
             "RESET": self._releaseAll,
             "RESTART_PAYLOAD": self._restart,
             "STOP_PAYLOAD": self._stop,
-            "FUNCTION": self._createFunction,
-            "RETURN": self._return
+            "FUNCTION": self._createFunction
         }
 
         self.vars = {}
@@ -124,7 +123,9 @@ class Convertor():
         for line in lines:
             if line.strip().startswith("RETURN"):
                 type = "int"
-            arduCode += self.convertLine(line)
+                arduCode += self._return(line.removeprefix("RETURN").strip().lower())
+            else:
+                arduCode += self.convertLine(line)
 
         arduCode = f"{type} {name}()" + "{\n" + arduCode + "\n}"
 
@@ -186,7 +187,8 @@ class Convertor():
         newText = "\""
         words = text.split(" ")
         for word in words:
-            if word in self.vars or word in self.defines:
+            print(word.removesuffix("()"))
+            if word in self.vars or word in self.defines or word.removesuffix("()") in self.functions:
                 newText += f'" + String({word}) + " '
             else:
                 trimmedWord = word.replace('\\', '')
