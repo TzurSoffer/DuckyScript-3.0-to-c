@@ -23,9 +23,5 @@ END_FUNCTION
 STRINGLN TIMER()
 $count = 3
 TIMER()
-$count = 2
-TIMER()
-$count = 10
-TIMER()
 
 STRINGLN Timer ended

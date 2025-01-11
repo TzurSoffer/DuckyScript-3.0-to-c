@@ -5,10 +5,12 @@ from ast import literal_eval
 
 def detectType(text):
     try:
-        _type = type(literal_eval(text.lower().capitalize()))     #< Check for bool by converting TRUE/FALSE to True/False
+        _type = type(text)
+        if _type == str:
+            _type = type(literal_eval(text.lower().capitalize()))     #< Check for bool by converting TRUE/FALSE to True/False
+
         if _type == bool:
             return("bool")
-        _type = type(literal_eval(text))
         if _type == str:
             return("String")
         if _type == int:
@@ -51,15 +53,14 @@ class Convertor():
             "RESET": self._releaseAll,
             "RESTART_PAYLOAD": self._restart,
             "STOP_PAYLOAD": self._stop,
-            "FUNCTION": self._createFunction
+            "FUNCTION": self._createFunction,
         }
 
-        self.vars = {}
+        self.vars = {"_JITTER_ENABLED": False, "_JITTER_MIN": 5, "_JITTER_MAX": 10}
         self.defines = {}
         self.functions = {}
 
         self.defaultDelay = 10
-        self.stringDelay = 5
         
         self.absoluteStart = 2
         self.functionsStart = 8
@@ -150,6 +151,8 @@ class Convertor():
         varType = detectType(value)
         if varType == "String":
             value = f'"{value}"'
+        elif varType == "bool":
+            value = str(value).lower()
         self.arduinoOutput = self._addVariableToOutput(f"{varType} {varName} = {value};")
         return("")
 
@@ -176,8 +179,7 @@ class Convertor():
         return("")
     
     def _setStringDelay(self, time):
-        self.stringDelay = time/1_000_000       #< in nanoseconds
-        return("")
+        return(self._setVar(f"$_JITTER_MIN = {time/1_000_000}"))       #< in nanoseconds
 
     def _pressKey(self, key):
         key = key.upper()
@@ -199,7 +201,7 @@ class Convertor():
             newText = newText[:-5]
         else:
             newText = newText[:-1]+"\""
-        return(f"typeWithDelay({newText}, {self.stringDelay});\n{self._delay(self.defaultDelay)}")
+        return(f"typeWithDelay({newText});\n{self._delay(self.defaultDelay)}")
 
     def _stringln(self, text):
         return(f"{self._string(text)}\n{self._pressKey("ENTER")}\n{self._delay(self.defaultDelay)}")
@@ -251,11 +253,23 @@ class Convertor():
     def _addPreCode(self):
 
         self.addLine("#include <Keyboard.h>")
+        # self.addLine("randomSeed(analogRead(0));")
+        
+        self.addLine("bool TRUE = true;")
+        self.addLine("bool FALSE = false;")
+        self.addLine("bool True = true;")
+        self.addLine("bool False = false;")
+        for name, value in self.vars.items():
+            self._createVar(name, value)
 
-        self.addLine("void typeWithDelay(String text, int delayTime) {")
+        self.addLine("void typeWithDelay(String text) {")
         self.addLine("for (int i = 0; i < text.length(); i++) {")
         self.addLine("Keyboard.press(text[i]);")
-        self.addLine("delay(delayTime);")
+        self.addLine("if (_JITTER_ENABLED == true) {")
+        self.addLine("delay(random(_JITTER_MIN, _JITTER_MAX));")
+        self.addLine("} else {")
+        self.addLine("delay(_JITTER_MIN);")
+        self.addLine("}")
         self.addLine("Keyboard.release(text[i]);")
         self.addLine("}}")
 
